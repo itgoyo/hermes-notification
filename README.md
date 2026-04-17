@@ -8,6 +8,9 @@ No more constantly switching back to check if the AI is done — just keep worki
 
 ---
 
+<img width="366" height="78" alt="image" src="https://github.com/user-attachments/assets/0bbf72a5-eb05-42e2-a749-6649b0ad6ad7" />
+
+
 ## ✨ Features
 
 - **macOS** — native banner via `osascript` + sound via `afplay`
