@@ -1,7 +1,7 @@
 name: hermes-notification
-version: 1.0.0
-description: "System notification (banner + sound) when Hermes finishes a response. Supports macOS, Linux, and Windows."
-author: itgoyo
+version: 2.0.0
+description: "macOS system notification when Hermes finishes a response. Clickable: opens web-ui session in browser if running, or focuses terminal window in CLI mode. Requires terminal-notifier (brew install terminal-notifier)."
+author: hermes
 requires_env: []
 hooks:
   - post_llm_call

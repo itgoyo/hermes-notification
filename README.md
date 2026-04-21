@@ -1,178 +1,190 @@
 # hermes-notification 🔔
 
-A plugin for [Hermes Agent](https://github.com/NousResearch/hermes) that sends a **native system notification** (banner + sound) the moment Hermes finishes a response.
+A plugin for [Hermes Agent](https://github.com/NousResearch/hermes-agent) that sends a **native macOS system notification** the moment Hermes finishes a response — with smart click-to-open behavior.
 
-No more constantly switching back to check if the AI is done — just keep working and let the notification tell you when it's ready.
+No more switching back to check if the AI is done. Just keep working, and let the notification bring you back when it's ready.
 
-![macOS notification preview](https://img.shields.io/badge/macOS-supported-brightgreen?logo=apple) ![Linux notification preview](https://img.shields.io/badge/Linux-supported-brightgreen?logo=linux) ![Windows notification preview](https://img.shields.io/badge/Windows-supported-brightgreen?logo=windows)
-
----
-
-<img width="366" height="78" alt="image" src="https://github.com/user-attachments/assets/0bbf72a5-eb05-42e2-a749-6649b0ad6ad7" />
-
-
-## ✨ Features
-
-- **macOS** — native banner via `osascript` + sound via `afplay`
-- **Linux** — native banner via `notify-send` + sound via `pw-play` / `paplay` / `aplay`
-- **Windows** — system tray balloon via PowerShell + `SystemSounds`
-- Response preview in the notification body (first N characters)
-- Fully configurable: title, sound, preview length, min response length
-- Non-blocking: runs in a background thread, never slows down Hermes
-- Zero external dependencies — uses only tools that ship with your OS
+![macOS](https://img.shields.io/badge/macOS-supported-brightgreen?logo=apple)
+![version](https://img.shields.io/badge/version-2.0.0-blue)
+![python](https://img.shields.io/badge/python-3.8%2B-blue?logo=python)
 
 ---
 
-## 📦 Installation
+<img width="366" height="78" alt="hermes notification preview" src="https://github.com/user-attachments/assets/0bbf72a5-eb05-42e2-a749-6649b0ad6ad7" />
 
-### 1. Copy the plugin into Hermes
+---
+
+## ✨ 功能特性
+
+- 🔔 **每次 Hermes 回复后**自动弹出 macOS 原生通知（横幅 + 声音）
+- 🖱️ **智能点击跳转**：
+  - 如果 **hermes-web-ui 正在运行**（默认 `localhost:8648`）→ 点击通知直接在 **Chrome** 打开对应 session 页面
+  - 如果是 **CLI 模式** → 点击通知自动**激活并聚焦终端窗口**（支持 iTerm2、Warp、Terminal 等）
+- ⚡ **非阻塞**：通知在后台线程发送，完全不影响 Hermes 响应速度
+- 🎵 通知声音可配置（默认 `Glass`，支持所有 macOS 系统声音）
+- 📝 响应正文预览（可配置截取长度）
+- 🔧 零侵入：纯插件，不修改 Hermes 核心代码
+- ⚙️ 完全可配置：标题、声音、预览长度、最小响应长度等
+
+---
+
+## 🆕 v2.0 重点改动
+
+### 1. 双模式智能点击跳转（核心新功能）
+
+旧版只能发送通知，点击无任何动作。v2.0 完全重写了点击逻辑：
+
+| 运行模式 | 点击行为 | 实现方式 |
+|---------|---------|---------|
+| Web UI 模式（`localhost:8648` 可访问） | 在 Chrome 打开 `http://localhost:8648/#/hermes/chat` | `terminal-notifier -open URL -activate com.google.chrome` |
+| CLI 模式（终端直接运行） | 激活并聚焦当前终端窗口 | `terminal-notifier -execute <script>` + AppleScript |
+
+### 2. 彻底抛弃 pyobjc
+
+macOS 15 上 `NSUserNotificationCenter` 已被 Apple 废弃，`pyobjc` 调用直接返回 `None`，通知完全失效。v2.0 改为：
+
+- **优先**：使用 [`terminal-notifier`](https://github.com/julienXX/terminal-notifier)（Homebrew 安装，功能完整）
+- **降级兜底**：`osascript`（系统内置，无点击功能但通知正常显示）
+
+### 3. 修复 `.sh` 脚本被 Script Editor 打开的 Bug
+
+terminal-notifier 的 `-execute` 参数在 macOS 上会通过 Launch Services 打开文件。  
+带 `.sh` 扩展名的文件会被 **Script Editor** 打开而非执行。
+
+**修复方案**：激活终端的临时脚本写入 `/tmp/hermes_activate_terminal`（**无扩展名**），这样 macOS 会直接以可执行文件方式运行它。
+
+### 4. 支持多种终端自动识别
+
+CLI 模式下自动检测当前运行的终端 App，优先级顺序：
+
+```
+iTerm2 → iTerm → Warp → Terminal → Hyper → Alacritty → kitty
+```
+
+通过 AppleScript 查询 `System Events` 进程列表实现，无需额外配置。
+
+---
+
+## 📦 安装
+
+### 1. 安装依赖（推荐）
 
 ```bash
-# Clone this repo
-git clone https://github.com/itgoyo/hermes-notification.git
+brew install terminal-notifier
+```
 
-# Copy plugin files into Hermes plugin directory
+> 不安装也可以使用，会自动降级为 `osascript` 发送通知（但点击跳转功能不可用）。
+
+### 2. 安装插件
+
+```bash
+git clone https://github.com/itgoyo/hermes-notification.git
 mkdir -p ~/.hermes/plugins/hermes-notification
 cp hermes-notification/__init__.py ~/.hermes/plugins/hermes-notification/
 cp hermes-notification/plugin.yaml  ~/.hermes/plugins/hermes-notification/
 ```
 
-Or with a one-liner:
+一行版：
 
 ```bash
 git clone https://github.com/itgoyo/hermes-notification.git && \
-mkdir -p ~/.hermes/plugins/hermes-notification && \
-cp hermes-notification/{__init__.py,plugin.yaml} ~/.hermes/plugins/hermes-notification/
+  mkdir -p ~/.hermes/plugins/hermes-notification && \
+  cp hermes-notification/{__init__.py,plugin.yaml} ~/.hermes/plugins/hermes-notification/
 ```
 
-### 2. Restart Hermes
+### 3. 重启 Hermes
 
-The plugin is auto-discovered on startup. You should see in the logs:
+插件在启动时自动发现，日志中应出现：
 
 ```
-hermes-notification: registered — will notify on every completed response
+hermes-notification: registered (v4 fixed)
 ```
-
-### 3. (macOS) Allow notifications
-
-On first run, macOS may ask for permission. If the banner doesn't appear:
-
-> **System Settings → Notifications → Script Editor** (or your terminal app) → Allow notifications
 
 ---
 
-## ⚙️ Configuration
+## ⚙️ 配置
 
-Create `~/.hermes/plugins/hermes-notification/config.json` to override any defaults:
+在 `~/.hermes/plugins/hermes-notification/config.json` 创建配置文件（可选，所有字段均有默认值）：
 
 ```json
 {
-    "sound": "Glass",
+    "enabled": true,
     "title": "Hermes ✅",
-    "preview_length": 100,
+    "sound": "Glass",
+    "preview_length": 80,
     "min_response_length": 10,
-    "enabled": true
+    "web_ui_port": 8648,
+    "web_ui_host": "localhost"
 }
 ```
 
-| Key | Default | Description |
-|---|---|---|
-| `sound` | `"Glass"` | **macOS**: any name from `/System/Library/Sounds/` (without `.aiff`), or a full file path, or `""` to disable sound. **Linux**: full path to a `.wav`/`.oga` file, or `""`. **Windows**: `"SystemAsterisk"`, `"SystemExclamation"`, `"SystemHand"`, `"SystemQuestion"`, or `""`. |
-| `title` | `"Hermes ✅"` | Title shown in the notification banner |
-| `preview_length` | `100` | Characters of the response to show in the body (`0` = no preview) |
-| `min_response_length` | `10` | Responses shorter than this are silently skipped |
-| `enabled` | `true` | Set to `false` to disable the plugin without uninstalling |
+| 字段 | 默认值 | 说明 |
+|-----|--------|------|
+| `enabled` | `true` | 是否启用插件 |
+| `title` | `"Hermes ✅"` | 通知标题 |
+| `sound` | `"Glass"` | 通知声音（macOS 系统声音名，留空则静音） |
+| `preview_length` | `80` | 响应预览的最大字符数 |
+| `min_response_length` | `10` | 少于此长度的响应不发送通知 |
+| `web_ui_port` | `8648` | hermes-web-ui 端口 |
+| `web_ui_host` | `"localhost"` | hermes-web-ui 主机 |
 
-### macOS sound options
+### 可用系统声音
 
-All built-in macOS sounds work out of the box:
-
-`Basso` `Blow` `Bottle` `Frog` `Funk` `Glass` `Hero` `Morse` `Ping` `Pop` `Purr` `Sosumi` `Submarine` `Tink`
+```
+Basso  Blow  Bottle  Frog  Funk  Glass  Hero  Morse  Ping  Pop  Purr
+Sosumi  Submarine  Tink
+```
 
 ---
 
-## 🧪 Testing
+## 🔍 工作原理
 
-Test the notification immediately without starting a full conversation:
+```
+Hermes 完成回复
+      ↓
+post_llm_call hook 触发
+      ↓
+检测 localhost:8648 是否可访问
+      ↓
+┌─────────────────────┬──────────────────────────┐
+│  Web UI 在运行       │  CLI 模式                 │
+│  open_url = 页面URL  │  检测活跃终端 App          │
+│  activate = Chrome  │  写 /tmp/hermes_activate_ │
+│                     │  terminal（无扩展名脚本）   │
+└─────────────────────┴──────────────────────────┘
+      ↓
+terminal-notifier 发送通知（后台线程）
+      ↓（fallback）
+osascript display notification
+```
+
+---
+
+## 🛠️ 调试
+
+开启 DEBUG 日志可以看到详细输出：
 
 ```bash
-python3 - <<'EOF'
-import sys
-sys.path.insert(0, "~/.hermes/plugins/hermes-notification")
-from hermes_notification import _notify
-_notify("Hermes ✅", "This is a test notification!", "Glass")
-import time; time.sleep(2)
-EOF
+# 在 ~/.hermes/config.yaml 中设置
+log_level: DEBUG
 ```
 
-Or trigger it directly from the plugin file:
-
-```bash
-cd ~/.hermes/plugins/hermes-notification
-python3 -c "
-from __init__ import _notify
-_notify('Hermes ✅', 'Test — plugin is working!', 'Glass')
-import time; time.sleep(2)
-"
-```
+日志关键词：
+- `hermes-notification: web-ui detected` — 检测到 Web UI 模式
+- `hermes-notification: CLI mode, terminal=iTerm2` — CLI 模式，识别到终端
+- `hermes-notification: terminal-notifier exit=0` — 通知发送成功
 
 ---
 
-## 🔧 How It Works
+## 📋 系统要求
 
-Hermes exposes a `post_llm_call` hook that fires after every completed AI response. This plugin registers a callback on that hook:
-
-```
-You send message → Hermes processes → AI responds
-                                            ↓
-                              post_llm_call hook fires
-                                            ↓
-                       ┌────────────────────────────────┐
-                       │  hermes-notification plugin     │
-                       │  ┌─────────────┐  ┌─────────┐  │
-                       │  │ osascript   │  │ afplay  │  │  ← macOS
-                       │  │ notify-send │  │ pw-play │  │  ← Linux
-                       │  │ PowerShell  │  │ PS Media│  │  ← Windows
-                       │  └─────────────┘  └─────────┘  │
-                       └────────────────────────────────┘
-                                            ↓
-                              Banner appears on screen 🔔
-```
-
-The callback runs in a **background daemon thread** so it never blocks or delays Hermes responses.
-
----
-
-## 🗂️ File Structure
-
-```
-hermes-notification/
-├── __init__.py          # Plugin logic (hooks, platform detection, notify/sound)
-├── plugin.yaml          # Plugin manifest (name, version, hooks)
-├── config.example.json  # Example configuration file
-└── README.md
-```
-
-After installation:
-```
-~/.hermes/plugins/hermes-notification/
-├── __init__.py
-├── plugin.yaml
-└── config.json          # Your personal config (optional, not tracked by git)
-```
-
----
-
-## 🤝 Contributing
-
-Pull requests are welcome! If you add support for a new platform or notification backend, please include:
-1. Platform detection logic in `_current_platform()`
-2. A `_<platform>_notify()` and `_<platform>_sound()` function
-3. A branch in `_notify()` calling your new functions
-4. An update to this README
+- macOS 10.14+
+- Python 3.8+
+- [Hermes Agent](https://github.com/NousResearch/hermes-agent)
+- `terminal-notifier`（可选，`brew install terminal-notifier`）
 
 ---
 
 ## 📄 License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT
